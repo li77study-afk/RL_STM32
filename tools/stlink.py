@@ -1,4 +1,8 @@
-"""Short-lived OpenOCD connection. No IDE or USB serial adapter required."""
+"""管理短期 OpenOCD 会话，通过 TCP/Tcl 向 ST-LINK 发送读写命令。
+
+Python → 本机 OpenOCD → USB/ST-LINK → SWD → STM32 内存。
+with STLink() 保证退出时释放连接；启动失败时请查看 logs/openocd_monitor.log。
+"""
 import re
 import socket
 import subprocess
@@ -9,12 +13,15 @@ ROOT = Path(__file__).resolve().parents[1]
 TOOLCHAIN = Path('D:/STM32Tools/arm-gnu-toolchain-13.3.rel1-mingw-w64-i686-arm-none-eabi/bin')
 
 def symbols():
+    # 从本次 ELF 查符号地址，避免源文件变化后仍使用旧的硬编码 RAM 地址。
+    # 必须确保板上固件与 ELF 匹配；magic/version 只能检查协议，不能检查每个地址。
     output = subprocess.check_output([str(TOOLCHAIN/'arm-none-eabi-nm.exe'), '-n', str(ROOT/'build/q_learning.elf')], text=True)
     return {m[2]: int(m[1], 16) for m in re.finditer(r'^([0-9a-fA-F]+) \w (\S+)$', output, re.M)}
 
 class STLink:
     def __enter__(self):
-        # An ephemeral loopback port avoids interfering with a user's debug server.
+        # 让系统分配临时回环 TCP 端口；关闭无需使用的 GDB/Telnet 端口。
+        # 端口不同并不意味着可以同时占用同一个 ST-LINK，硬件访问仍应互斥。
         with socket.socket() as sock:
             sock.bind(('127.0.0.1', 0))
             self.port = sock.getsockname()[1]
@@ -28,6 +35,7 @@ class STLink:
             '-c', 'telnet_port disabled', '-c', f'tcl_port {self.port}',
         ], stdout=self.log, stderr=subprocess.STDOUT,
            creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+        # 等待 OpenOCD 初始化并开始监听，而不是假定启动子进程后立即可连接。
         for _ in range(100):
             if self.process.poll() is not None:
                 self.log.close()
@@ -42,6 +50,7 @@ class STLink:
         raise TimeoutError('OpenOCD did not start')
 
     def command(self, command):
+        # OpenOCD Tcl RPC 使用 0x1A 分隔消息；TCP 一次 recv 不保证收完整回复。
         self.sock.sendall(command.encode() + b'\x1a')
         data = b''
         while not data.endswith(b'\x1a'):
@@ -52,9 +61,11 @@ class STLink:
         return data[:-1].decode()
 
     def words(self, address, count):
+        # 32 表示每项 32 位；count 为字数，不是字节数。
         return [int(v, 0) for v in self.command(f'read_memory {address:#x} 32 {count}').split()]
 
     def __exit__(self, *exc):
+        # 优先用协议正常退出，只有进程迟迟不退出时才终止自己创建的子进程。
         try:
             self.command('shutdown')
         except (OSError, ConnectionError):

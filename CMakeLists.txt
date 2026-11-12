@@ -43,6 +43,7 @@ set(CORE_SOURCES
     Core/Src/q_display.c
     Core/Src/syscalls.c
     Learning/q_learning.c
+    Learning/map_library.c
 )
 set(HAL_SOURCES
     Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c
@@ -114,7 +115,7 @@ target_compile_options(${PROJECT_NAME} PRIVATE
 )
 
 # ---------- 链接选项 ----------
-# nano.specs: 精简 newlib;: 支持 printf("%f")
+# nano.specs 使用精简 newlib；未启用浮点 printf，界面通过整数拆分显示小数。
 target_link_options(${PROJECT_NAME} PRIVATE
     ${CPU_FLAGS}
     -T${CMAKE_CURRENT_SOURCE_DIR}/STM32H750XBH6_FLASH.ld

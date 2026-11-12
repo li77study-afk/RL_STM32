@@ -118,7 +118,7 @@ SECTIONS
     _edata = .;
   } >RAM_D1 AT> FLASH :data
 
-  /* 未初始化全局变量 -> RAM_D1 (Camera_Buffer 150KB 在这里) */
+  /* 未初始化全局变量 -> AXI SRAM：整屏帧缓冲、当前地图及应用状态。 */
   .bss (NOLOAD) :
   {
     . = ALIGN(4);

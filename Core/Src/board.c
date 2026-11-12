@@ -1,17 +1,17 @@
-/* Clock/SPI configuration adapted from the verified FK750M6 camera project. */
+/* FK750M6-XBH6 板级配置，沿用已经验证的供电、25 MHz 晶振与 SPI6 引脚。
+ * hspi6 保存 HAL 驱动的寄存器地址、配置和传输状态，由 LCD 驱动共享使用。 */
 #include "main.h"
 SPI_HandleTypeDef hspi6;
 void SystemClock_Config(void)
 {
+  /* 结构清零后只填写本工程用到的选项，避免栈上的未定义值进入配置。 */
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
-  /** Supply configuration update enable
-  */
+  /* 本板使用内部 LDO。供电方式必须与实际硬件一致。 */
   HAL_PWREx_ConfigSupply(PWR_LDO_SUPPLY);
 
-  /** Configure the main internal regulator output voltage
-  */
+  /* 先到电压等级 VOS1，等待稳定，再配置支持 480 MHz 的 VOS0。 */
   __HAL_PWR_VOLTAGESCALING_CONFIG(PWR_REGULATOR_VOLTAGE_SCALE1);
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
@@ -21,9 +21,9 @@ void SystemClock_Config(void)
 
   while(!__HAL_PWR_GET_FLAG(PWR_FLAG_VOSRDY)) {}
 
-  /** Initializes the RCC Oscillators according to the specified parameters
-  * in the RCC_OscInitTypeDef structure.
-  */
+  /* PLL1 时钟链：25 MHz HSE / M(5) = 5 MHz，乘 N(192) 得到 960 MHz，
+   * P 输出再除 2 得到 480 MHz CPU 时钟。FRACN=0 表示不使用小数倍频。
+   * 5 MHz 输入对应 VCIRANGE_2；使用宽 VCO 范围。 */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
   RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -41,8 +41,8 @@ void SystemClock_Config(void)
     Error_Handler();
   }
 
-  /** Initializes the CPU, AHB and APB buses clocks
-  */
+  /* CPU 480 MHz，AHB=240 MHz，四组 APB=120 MHz。
+   * SPI6 选择 APB4/D3PCLK1 后再除 2，最终 SCK=60 MHz。 */
   RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2
                               |RCC_CLOCKTYPE_D3PCLK1|RCC_CLOCKTYPE_D1PCLK1;
@@ -54,6 +54,7 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.APB2CLKDivider = RCC_APB2_DIV2;
   RCC_ClkInitStruct.APB4CLKDivider = RCC_APB4_DIV2;
 
+  /* 提升时钟必须同时设置对应的 Flash 等待周期，否则取指可能不稳定。 */
   if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
   {
     Error_Handler();
@@ -70,22 +71,23 @@ void MX_SPI6_Init(void)
   /* USER CODE BEGIN SPI6_Init 1 */
 
   /* USER CODE END SPI6_Init 1 */
-  /* SPI6 parameter configuration*/
+  /* SPI 主机仅发送，无 MISO。默认 8 位用于屏幕指令；发送像素时 LCD 驱动
+   * 临时切换为 16 位，传完恢复 8 位。CPOL=0、CPHA=第一边沿，即模式 0。 */
   hspi6.Instance = SPI6;
   hspi6.Init.Mode = SPI_MODE_MASTER;
   hspi6.Init.Direction = SPI_DIRECTION_2LINES_TXONLY;
   hspi6.Init.DataSize = SPI_DATASIZE_8BIT;
   hspi6.Init.CLKPolarity = SPI_POLARITY_LOW;
   hspi6.Init.CLKPhase = SPI_PHASE_1EDGE;
-  hspi6.Init.NSS = SPI_NSS_HARD_OUTPUT;
+  hspi6.Init.NSS = SPI_NSS_HARD_OUTPUT; /* 片选由外设输出到 PA15。 */
   hspi6.Init.BaudRatePrescaler = SPI_BAUDRATEPRESCALER_2;
-  hspi6.Init.FirstBit = SPI_FIRSTBIT_MSB;
+  hspi6.Init.FirstBit = SPI_FIRSTBIT_MSB; /* 高位先发，与屏幕指令/RGB565 格式一致。 */
   hspi6.Init.TIMode = SPI_TIMODE_DISABLE;
   hspi6.Init.CRCCalculation = SPI_CRCCALCULATION_DISABLE;
   hspi6.Init.CRCPolynomial = 0x0;
   hspi6.Init.NSSPMode = SPI_NSS_PULSE_ENABLE;
   hspi6.Init.NSSPolarity = SPI_NSS_POLARITY_LOW;
-  hspi6.Init.FifoThreshold = SPI_FIFO_THRESHOLD_02DATA;
+  hspi6.Init.FifoThreshold = SPI_FIFO_THRESHOLD_02DATA; /* 配合驱动成对写入像素。 */
   hspi6.Init.TxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
   hspi6.Init.RxCRCInitializationPattern = SPI_CRC_INITIALIZATION_ALL_ZERO_PATTERN;
   hspi6.Init.MasterSSIdleness = SPI_MASTER_SS_IDLENESS_00CYCLE;
@@ -120,6 +122,8 @@ void HAL_MspInit(void)
 
 void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
 {
+  /* HAL_SPI_Init 首次初始化时调用此回调，负责外设时钟源和 GPIO 复用。
+   * GPIO 的 AF 编号由芯片引脚复用表决定，同一外设在不同引脚可能不同。 */
   GPIO_InitTypeDef GPIO_InitStruct = {0};
   RCC_PeriphCLKInitTypeDef PeriphClkInitStruct = {0};
   if(hspi->Instance==SPI6)
@@ -137,7 +141,7 @@ void HAL_SPI_MspInit(SPI_HandleTypeDef* hspi)
       Error_Handler();
     }
 
-    /* Peripheral clock enable */
+    /* 选择完时钟源，再打开 SPI6 和 GPIOA/G 的时钟门控。 */
     __HAL_RCC_SPI6_CLK_ENABLE();
 
     __HAL_RCC_GPIOA_CLK_ENABLE();

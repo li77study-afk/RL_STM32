@@ -1,14 +1,17 @@
-"""Observe training over SWD without halting the Cortex-M7."""
+"""通过 ST-LINK/SWD 读取训练状态，不暂停 Cortex-M7，也不需要串口。"""
 import argparse
 import json
 import time
 from stlink import ROOT, STLink, symbols
 
+# 顺序必须与 Core/Inc/q_app.h 的 QDiagnostics 完全一致，每项占 4 字节。
 FIELDS = ('sequence magic version stage fatal_count heartbeat_ms mode episodes successes timeouts '
           'total_steps state steps epsilon_permille last_steps last_return eval_steps frames '
-          'spi_errors update_cycles render_us training_ms recent_success_percent demo_runs core_hz').split()
+          'spi_errors update_cycles render_us training_ms recent_success_percent demo_runs core_hz '
+          'map_id map_count shortest_reference free_cells category training_target grid_side').split()
 
 def sample(link, address):
+    # 前后序号相同且为偶数，说明整块数据未跨过一次应用快照发布。
     for _ in range(100):
         first = link.words(address, 1)[0]
         if first & 1:
@@ -17,8 +20,9 @@ def sample(link, address):
         last = link.words(address, 1)[0]
         if first == values[0] == last and not last & 1:
             data = dict(zip(FIELDS, values))
-            if data['magic'] != 0x514C3735 or data['version'] != 1:
-                raise RuntimeError('Board firmware does not match Q-learning diagnostics version 1')
+            if data['magic'] != 0x514C3735 or data['version'] != 2:
+                raise RuntimeError('Board firmware does not match Q-learning diagnostics version 2; rebuild and flash')
+            # OpenOCD 按无符号 32 位数返回，奖励和必须手动还原有符号补码。
             if data['last_return'] & 0x80000000:
                 data['last_return'] -= 1 << 32
             return data
@@ -33,9 +37,10 @@ def main():
     syms = symbols(); rows = []
     with STLink() as link:
         if args.restart:
+            # 向单字命令邮箱写 1；MCU 自己在主循环里安全地重启当前地图训练。
             link.command(f'write_memory {syms["g_command"]:#x} 32 {{1}}')
             time.sleep(0.1)
-        start = time.monotonic()
+        start = time.monotonic()  # 单调时钟不受电脑校时影响。
         while True:
             data = sample(link, syms['g_diag'])
             data['elapsed_s'] = round(time.monotonic()-start, 3)

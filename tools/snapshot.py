@@ -1,6 +1,6 @@
-"""Briefly halt the board after a completed frame, save framebuffer and Q table.
+"""等待一次完整刷新后短暂停核，读回像素与 Q 表，再恢复 MCU。
 
-Requires Pillow. The PNG represents MCU RAM, not a photograph of the LCD.
+需要 Pillow。输出图像来自 MCU 帧缓冲，不是物理 LCD 照片。
 """
 import argparse
 import json
@@ -30,9 +30,11 @@ def main():
         link.command('halt')
         try:
             link.command(f'dump_image {{{raw.as_posix()}}} {syms["g_framebuffer"]:#x} 153600')
-            link.command(f'dump_image {{{qraw.as_posix()}}} {syms["g_agent"]:#x} 1024')
+            # QLearner 的第一个成员是 Q 表：16*16*4 个 float，共 4096 字节。
+            link.command(f'dump_image {{{qraw.as_posix()}}} {syms["g_agent"]:#x} 4096')
         finally:
             link.command('resume')
+    # Cortex-M7 为小端；H 是 uint16_t，解码出 RGB565 后扩展到 8 位 RGB。
     pixels = struct.unpack('<76800H', raw.read_bytes())
     rgb = bytes(channel for value in pixels for channel in (
         ((value >> 11) & 31)*255//31,
@@ -40,8 +42,8 @@ def main():
         (value & 31)*255//31))
     args.output.parent.mkdir(parents=True, exist_ok=True)
     Image.frombytes('RGB', (240,320), rgb).save(args.output)
-    values = struct.unpack('<256f', qraw.read_bytes())
-    table = [list(values[s*4:s*4+4]) for s in range(64)]
+    values = struct.unpack('<1024f', qraw.read_bytes())
+    table = [list(values[s*4:s*4+4]) for s in range(256)]
     (ROOT/'logs/q_table.json').write_text(json.dumps(table, indent=2), encoding='utf-8')
     print(json.dumps({'image': str(args.output), 'diagnostics': status}, indent=2))
 
