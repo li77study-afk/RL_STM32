@@ -1,0 +1,8 @@
+{
+  "cmake.cmakePath": "D:/STM32Tools/cmake-4.4.3-windows-x86_64/bin/cmake.exe",
+  "cmake.generator": "Ninja",
+  "cmake.configureSettings": {
+    "CMAKE_MAKE_PROGRAM": "D:/STM32Tools/ninja/ninja.exe"
+  },
+  "C_Cpp.default.compileCommands": "${workspaceFolder}/build/compile_commands.json"
+}

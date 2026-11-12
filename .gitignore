@@ -1,5 +1,6 @@
-build/
-build-host/
-logs/
-__pycache__/
-*.pyc
+**/build/
+**/build-host/
+**/.venv/
+**/logs/
+**/__pycache__/
+**/*.pyc

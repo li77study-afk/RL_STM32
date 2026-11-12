@@ -1,0 +1,9 @@
+build/
+build-host/
+.venv/
+__pycache__/
+*.pyc
+data/
+logs/
+models/*.pt
+models/*.npz
