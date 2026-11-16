@@ -45,7 +45,7 @@ set(CORE_SOURCES
     Core/Src/syscalls.c
     Game/battle.c
     Learning/tank_agent.c
-    Learning/map_library.c
+    Game/arena_maps.c
 )
 set(HAL_SOURCES
     Drivers/STM32H7xx_HAL_Driver/Src/stm32h7xx_hal.c

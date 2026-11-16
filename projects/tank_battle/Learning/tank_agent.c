@@ -1,7 +1,7 @@
 #include "tank_agent.h"
 #include <string.h>
 
-_Static_assert(sizeof(TankQEntry)==40,"Q table memory budget assumes 40-byte entries");
+_Static_assert(sizeof(TankQEntry)==56,"Q table memory budget assumes 56-byte entries");
 
 static uint32_t hash_key(uint64_t key)
 {
@@ -31,7 +31,9 @@ static TankQEntry *create(TankAgent *a,uint64_t key)
         if(!victim||entry->visits<victim->visits)victim=entry;
     }
     if(victim->key)a->evictions++;
-    memset(victim,0,sizeof(*victim));victim->key=key;return victim;
+    memset(victim,0,sizeof(*victim));victim->key=key;
+    for(unsigned k=5;k<BATTLE_ACTIONS;k++)victim->q[k]=TANK_FIRE_PRIOR;
+    return victim;
 }
 
 void TankAgent_Init(TankAgent *a,TankQEntry *storage,uint32_t seed)
@@ -43,15 +45,15 @@ void TankAgent_Init(TankAgent *a,TankQEntry *storage,uint32_t seed)
 float TankAgent_Q(const TankAgent *a,const BattleState *s,uint32_t action)
 {
     const TankQEntry *entry=find(a,Battle_StateKey(s));
-    return entry&&action<BATTLE_ACTIONS?entry->q[action]:0.0f;
+    return entry&&action<BATTLE_ACTIONS?entry->q[action]:(action>=5&&action<BATTLE_ACTIONS?TANK_FIRE_PRIOR:0.0f);
 }
 
 uint32_t TankAgent_Greedy(const TankAgent *a,const BattleState *s)
 {
     uint64_t key=Battle_StateKey(s);const TankQEntry *entry=find(a,key);
-    /* 未学过的状态使用由状态键决定的固定平局顺序，不隐藏寻路/躲避规则。
-     * 这样初始全零不会总朝上走，且评估不修改训练 RNG。 */
-    unsigned start=hash_key(key)%BATTLE_ACTIONS,best=start;
+    /* 未见观测有小的开火初值，优先从带开火的 5 个动作中打破平局。
+     * 已学习观测仍按实际 Q 值选动作；不在此处隐藏寻路或躲避规则。 */
+    unsigned start=hash_key(key)%BATTLE_ACTIONS,best=entry?start:5u+hash_key(key)%5u;
     if(entry)for(unsigned n=1;n<BATTLE_ACTIONS;n++) {
         unsigned k=(start+n)%BATTLE_ACTIONS;
         if(entry->q[k]>entry->q[best])best=k;
@@ -75,6 +77,7 @@ void TankAgent_Update(TankAgent *a,const BattleState *before,uint32_t action,con
     if(!t.terminated) {
         const TankQEntry *next=find(a,Battle_StateKey(after));
         if(next){future=next->q[0];for(unsigned k=1;k<BATTLE_ACTIONS;k++)if(next->q[k]>future)future=next->q[k];}
+        else future=TANK_FIRE_PRIOR;
     }
     TankQEntry *entry=create(a,Battle_StateKey(before));float *value=entry->q+action;
     float td=t.reward+BATTLE_GAMMA*future-*value;
@@ -92,6 +95,8 @@ void TankAgent_Finish(TankAgent *a,const BattleState *s)
 void BattleScore_Add(BattleScore *score,const BattleState *s)
 {
     score->games++;score->steps+=s->steps;
+    score->blue_shots+=s->blue_shots;score->red_shots+=s->red_shots;score->blue_ready+=s->blue_ready;score->red_ready+=s->red_ready;
+    score->blue_bank_kills+=s->blue_bank_kills;score->red_bank_kills+=s->red_bank_kills;
     if(s->outcome==BATTLE_BLUE_WIN)score->wins++;
     else if(s->outcome==BATTLE_RED_WIN)score->losses++;
     else {score->draws++;score->timeouts+=s->outcome==BATTLE_TIMEOUT;}

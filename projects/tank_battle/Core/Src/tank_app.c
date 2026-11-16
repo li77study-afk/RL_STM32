@@ -6,7 +6,7 @@
  * 快速训练每批只跑有限步，不用屏幕播放速度限制算法。
  */
 #include "tank_app.h"
-#include "map_library.h"
+#include "arena_maps.h"
 #include "main.h"
 #include <string.h>
 
@@ -22,9 +22,8 @@ static uint8_t recent[100];static uint32_t recent_sum,recent_count;
 
 void Tank_App_Init(void)
 {
-    /* 修改这个编号即可换地图，重新编译烧录。不同地图从零训练各自的 Q 表。
-     * 75 号为更密集的回路迷宫，包含岔路、窄通道和遮挡，适合反弹弹丸对战。 */
-    if(!Map_Init(75)||!Battle_WorldInit(&g_world,g_current_map.cells,g_current_map.id))Error_Handler();
+    /* 专用竞技场：1=分散掩体，2=反弹走位，3=错位掩体。均留有宽阔空间。 */
+    if(!Arena_Init(&g_world,1))Error_Handler();
     TankAgent_Init(&g_agent,g_q_table,750);
     spawn_rng=750u^0x51a750u;demo_rng=0xd3a0750u;intro_rng=0xba55123u;intro_action_rng=0xc01750u;
     memset(&demo,0,sizeof(demo));memset(&evaluation,0,sizeof(evaluation));memset(&display,0,sizeof(display));
@@ -35,7 +34,14 @@ void Tank_App_Init(void)
     mode=MODE_BASELINE;frozen=0;g_command=0;
     Battle_Reset(&g_world,&g_game,&intro_rng);
     step_tick=HAL_GetTick();render_tick=step_tick-100u;publish_tick=step_tick-100u;led_tick=step_tick;
-    g_diag.magic=0x54414e4bu;g_diag.version=3;g_diag.stage=4;
+    g_diag.magic=0x54414e4bu;g_diag.version=4;g_diag.stage=4;
+}
+
+static const BattleBullet *representative(const BattleBullet *pool)
+{
+    static const BattleBullet empty={0};const BattleBullet *chosen=&empty;
+    for(unsigned i=0;i<BATTLE_BULLET_LIMIT;i++)if(pool[i].active&&(!chosen->active||pool[i].collisions>chosen->collisions))chosen=pool+i;
+    return chosen;
 }
 
 static void publish(uint32_t now)
@@ -53,13 +59,22 @@ static void publish(uint32_t now)
     g_diag.frames=display.frames;g_diag.spi_errors=display.spi_errors;g_diag.render_us=display.render_us;
     g_diag.update_cycles=update_cycles;g_diag.training_ms=training_ms;g_diag.q_bytes=TANK_Q_BYTES;
     g_diag.core_hz=SystemCoreClock;g_diag.frozen=frozen;
-    g_diag.blue_bullet_active=g_game.blue_bullet.active;g_diag.blue_bullet_position=g_game.blue_bullet.position;
-    g_diag.blue_bullet_direction=g_game.blue_bullet.direction;g_diag.blue_bullet_collisions=g_game.blue_bullet.collisions;
-    g_diag.red_bullet_active=g_game.red_bullet.active;g_diag.red_bullet_position=g_game.red_bullet.position;
-    g_diag.red_bullet_direction=g_game.red_bullet.direction;g_diag.red_bullet_collisions=g_game.red_bullet.collisions;
+    const BattleBullet *blue=representative(g_game.blue_bullets),*red=representative(g_game.red_bullets);
+    g_diag.blue_bullet_active=blue->active;g_diag.blue_bullet_position=blue->position;
+    g_diag.blue_bullet_direction=blue->direction;g_diag.blue_bullet_collisions=blue->collisions;
+    g_diag.red_bullet_active=red->active;g_diag.red_bullet_position=red->position;
+    g_diag.red_bullet_direction=red->direction;g_diag.red_bullet_collisions=red->collisions;
     g_diag.q_used=g_agent.used;g_diag.q_evictions=g_agent.evictions;
-    g_diag.blue_bullet_x=g_game.blue_bullet.x;g_diag.blue_bullet_y=g_game.blue_bullet.y;
-    g_diag.red_bullet_x=g_game.red_bullet.x;g_diag.red_bullet_y=g_game.red_bullet.y;
+    g_diag.blue_bullet_x=(uint32_t)(blue->x*1000+0.5f);g_diag.blue_bullet_y=(uint32_t)(blue->y*1000+0.5f);
+    g_diag.red_bullet_x=(uint32_t)(red->x*1000+0.5f);g_diag.red_bullet_y=(uint32_t)(red->y*1000+0.5f);
+    g_diag.blue_active_bullets=Battle_ActiveBullets(g_game.blue_bullets);g_diag.red_active_bullets=Battle_ActiveBullets(g_game.red_bullets);
+    g_diag.blue_shots=g_game.blue_shots;g_diag.red_shots=g_game.red_shots;
+    g_diag.blue_cooldown_ms=g_game.blue_cooldown*BATTLE_TICK_MS;g_diag.red_cooldown_ms=g_game.red_cooldown*BATTLE_TICK_MS;
+    g_diag.eval_blue_shots=evaluation.blue_shots;g_diag.eval_red_shots=evaluation.red_shots;
+    g_diag.eval_blue_ready=evaluation.blue_ready;g_diag.eval_red_ready=evaluation.red_ready;
+    g_diag.eval_blue_bank_kills=evaluation.blue_bank_kills;g_diag.eval_red_bank_kills=evaluation.red_bank_kills;
+    g_diag.eval_steps=evaluation.steps;g_diag.fire_cooldown_ms=BATTLE_FIRE_COOLDOWN*BATTLE_TICK_MS;
+    g_diag.tick_ms=BATTLE_TICK_MS;g_diag.speed_ratio_x1000=1000;g_diag.coordinate_scale=1000;
     __DMB();g_diag.sequence++;
 }
 
@@ -74,7 +89,7 @@ void Tank_App_Poll(void)
     if(g_command==3){frozen=0;step_tick=HAL_GetTick();g_command=0;}
     uint32_t now=HAL_GetTick();
     if(!frozen) {
-        if(mode==MODE_BASELINE&&now-step_tick>=(g_game.outcome?700u:120u)) {
+        if(mode==MODE_BASELINE&&now-step_tick>=(g_game.outcome?700u:BATTLE_TICK_MS)) {
             step_tick=now;
             if(g_game.outcome) {
                 if(++intro_games>=2) {
@@ -102,15 +117,15 @@ void Tank_App_Poll(void)
             Tank_Display(mode,recent_sum,&baseline,&evaluation,&demo,&display);
             evaluation=TankAgent_Evaluate(&g_world,&g_agent,0xbaf123u,500,0);
             mode=MODE_DEMO;Battle_Reset(&g_world,&g_game,&demo_rng);step_tick=HAL_GetTick();
-        } else if(mode==MODE_DEMO&&now-step_tick>=(g_game.outcome?1100u:160u)) {
-            step_tick=now;
-            if(g_game.outcome)Battle_Reset(&g_world,&g_game,&demo_rng);
+        } else if(mode==MODE_DEMO&&now-step_tick>=(g_game.outcome?1100u:BATTLE_TICK_MS)) {
+            if(g_game.outcome){step_tick=now;Battle_Reset(&g_world,&g_game,&demo_rng);}
             else {
+                step_tick+=BATTLE_TICK_MS; /* 固定时间步，避免显示开销累积拉长 0.5 s 冷却。 */
                 Battle_Step(&g_world,&g_game,TankAgent_Greedy(&g_agent,&g_game));
                 if(g_game.outcome)BattleScore_Add(&demo,&g_game);
             }
         }
-        if(now-render_tick>=100u) {
+        if(now-render_tick>=50u) {
             render_tick=now;Tank_Display(mode,recent_count?recent_sum*100u/recent_count:0,&baseline,&evaluation,&demo,&display);
         }
     }

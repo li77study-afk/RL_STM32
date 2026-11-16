@@ -5,7 +5,7 @@
 | 工程 | 内容 | 操作入口 |
 |---|---|---|
 | [Q-learning](projects/q_learning/README.md) | 板上从零训练 16×16 迷宫，100 张地图，详细中文注释 | `projects/q_learning` |
-| [坦克迷宫对战](projects/tank_battle/README.md) | 蓝方板上 Q-learning、红方固定策略、飞行弹丸与三次撞墙反弹 | `projects/tank_battle` |
+| [坦克迷宫对战](projects/tank_battle/README.md) | 宽阔掩体、车弹同速、0.5 秒多弹连发与板上 Q-learning | `projects/tank_battle` |
 | [CNN 手写数字识别](projects/digit_cnn/README.md) | OV5640 实时预览、单数字预处理、纯 C FP32 CNN 推理 | `projects/digit_cnn` |
 
 ```text

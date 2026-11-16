@@ -11,18 +11,20 @@ from monitor import sample,ready
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--output',type=Path,default=ROOT/'logs/frame.png')
     parser.add_argument('--wait-bounce',action='store_true',help='Wait up to 30 seconds for a live ricocheting bullet')
+    parser.add_argument('--wait-multi',action='store_true',help='Wait for at least two live bullets from one tank')
     args=parser.parse_args()
     syms=symbols();raw=ROOT/'logs/frame.bin'
     with STLink() as link:
         ready(link,syms['g_diag'])
         try:
-            if args.wait_bounce:
+            if args.wait_bounce or args.wait_multi:
                 deadline=time.monotonic()+30
                 while True:
                     current=sample(link,syms['g_diag'])
                     bouncing=(current['blue_bullet_active'] and current['blue_bullet_collisions']>0) or (current['red_bullet_active'] and current['red_bullet_collisions']>0)
-                    if bouncing:break
-                    if time.monotonic()>deadline:raise TimeoutError('No ricochet seen in 30 seconds')
+                    multi=current['blue_active_bullets']>=2 or current['red_active_bullets']>=2
+                    if (not args.wait_bounce or bouncing) and (not args.wait_multi or multi):break
+                    if time.monotonic()>deadline:raise TimeoutError('Requested bullet condition not seen in 30 seconds')
                     time.sleep(0.05)
             link.command(f'write_memory {syms["g_command"]:#x} 32 {{2}}');deadline=time.monotonic()+5
             while True:

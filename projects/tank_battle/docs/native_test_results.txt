@@ -1,29 +1,32 @@
-PASS rules: real flight, fixed direction, 3-wall limit, ricochet self-hit, no tunneling, synchronous moves, TD, full state keys.
-BASE seed=750 W=186 L=791 D=23 timeout=0
-TRAIN seed=750 ep=10000 updates=76010 eps=785 evalW=146/300 L=150 D=4
-TRAIN seed=750 ep=20000 updates=155381 eps=569 evalW=204/300 L=93 D=3
-TRAIN seed=750 ep=30000 updates=240121 eps=354 evalW=231/300 L=67 D=2
-TRAIN seed=750 ep=40000 updates=331818 eps=138 evalW=250/300 L=49 D=1
-TRAIN seed=750 ep=50000 updates=433074 eps=30 evalW=269/300 L=31 D=0
-TRAIN seed=750 ep=60000 updates=538634 eps=30 evalW=272/300 L=28 D=0
-FINAL seed=750 W=905 L=94 D=1 timeout=0 updates=538634
-TABLE used=100431 evictions=4
-BASE seed=1 W=186 L=791 D=23 timeout=0
-TRAIN seed=1 ep=10000 updates=75355 eps=785 evalW=141/300 L=157 D=2
-TRAIN seed=1 ep=20000 updates=155005 eps=569 evalW=213/300 L=86 D=1
-TRAIN seed=1 ep=30000 updates=239874 eps=354 evalW=240/300 L=58 D=2
-TRAIN seed=1 ep=40000 updates=332998 eps=138 evalW=249/300 L=49 D=2
-TRAIN seed=1 ep=50000 updates=434017 eps=30 evalW=272/300 L=27 D=1
-TRAIN seed=1 ep=60000 updates=538032 eps=30 evalW=278/300 L=22 D=0
-FINAL seed=1 W=911 L=88 D=1 timeout=0 updates=538032
-TABLE used=100495 evictions=5
-BASE seed=42 W=186 L=791 D=23 timeout=0
-TRAIN seed=42 ep=10000 updates=75248 eps=785 evalW=144/300 L=147 D=9
-TRAIN seed=42 ep=20000 updates=154549 eps=569 evalW=210/300 L=86 D=4
-TRAIN seed=42 ep=30000 updates=239161 eps=354 evalW=224/300 L=74 D=2
-TRAIN seed=42 ep=40000 updates=332643 eps=138 evalW=253/300 L=46 D=1
-TRAIN seed=42 ep=50000 updates=434430 eps=30 evalW=266/300 L=34 D=0
-TRAIN seed=42 ep=60000 updates=539856 eps=30 evalW=270/300 L=30 D=0
-FINAL seed=42 W=916 L=82 D=2 timeout=0 updates=539856
-TABLE used=101426 evictions=3
-PASS: three from-zero training seeds improve wins by >10 points and reduce losses; evaluation is read-only.
+ARENA 1 free=176 bank_solutions=6468 connected_2x2_squares=124
+ARENA 2 free=168 bank_solutions=5676 connected_2x2_squares=112
+ARENA 3 free=176 bank_solutions=7628 connected_2x2_squares=124
+PASS rules: cover space, equal speeds, 500ms overlapping fire, move+fire, ricochet kill, 3 collisions, TD.
+UNTRAINED seed=750 W=86 L=362 D=52 shots=1263
+BASE seed=750 W=87 L=384 D=29 shots=1020 ready=2122 bank=6
+TRAIN seed=750 ep=10000 W=48/200 shots=465 ready=663 bank=0
+TRAIN seed=750 ep=20000 W=78/200 shots=485 ready=767 bank=0
+TRAIN seed=750 ep=30000 W=106/200 shots=489 ready=818 bank=2
+TRAIN seed=750 ep=40000 W=115/200 shots=445 ready=855 bank=1
+TRAIN seed=750 ep=50000 W=126/200 shots=477 ready=912 bank=2
+TRAIN seed=750 ep=60000 W=132/200 shots=493 ready=971 bank=5
+FINAL seed=750 W=322 L=153 D=25 shots=1275 ready=2587 bank=2 steps=6325 used=80814 evict=217 updates=660215
+UNTRAINED seed=1 W=86 L=362 D=52 shots=1263
+BASE seed=1 W=87 L=384 D=29 shots=1020 ready=2122 bank=6
+TRAIN seed=1 ep=10000 W=54/200 shots=484 ready=723 bank=2
+TRAIN seed=1 ep=20000 W=67/200 shots=484 ready=721 bank=1
+TRAIN seed=1 ep=30000 W=95/200 shots=479 ready=782 bank=1
+TRAIN seed=1 ep=40000 W=99/200 shots=519 ready=821 bank=1
+TRAIN seed=1 ep=50000 W=125/200 shots=523 ready=852 bank=1
+TRAIN seed=1 ep=60000 W=135/200 shots=539 ready=903 bank=0
+FINAL seed=1 W=312 L=155 D=33 shots=1358 ready=2387 bank=11 steps=6548 used=83045 evict=294 updates=667848
+UNTRAINED seed=42 W=86 L=362 D=52 shots=1263
+BASE seed=42 W=87 L=384 D=29 shots=1020 ready=2122 bank=6
+TRAIN seed=42 ep=10000 W=61/200 shots=459 ready=669 bank=1
+TRAIN seed=42 ep=20000 W=68/200 shots=493 ready=741 bank=1
+TRAIN seed=42 ep=30000 W=83/200 shots=489 ready=821 bank=4
+TRAIN seed=42 ep=40000 W=97/200 shots=490 ready=848 bank=2
+TRAIN seed=42 ep=50000 W=118/200 shots=496 ready=938 bank=2
+TRAIN seed=42 ep=60000 W=135/200 shots=512 ready=975 bank=0
+FINAL seed=42 W=324 L=149 D=27 shots=1271 ready=2441 bank=1 steps=6230 used=82383 evict=291 updates=668262
+PASS learning: three seeds improve win rate; evaluation does not train.

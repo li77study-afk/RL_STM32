@@ -47,7 +47,9 @@ static void tank(unsigned position,unsigned target,uint16_t color,int destroyed)
     rect(x-5,y-5,2,11,RGB(75,91,110));rect(x+4,y-5,2,11,RGB(75,91,110));
     rect(x-3,y-4,7,9,color);rect(x-1,y-1,3,3,white);
     /* 炮塔图形与真正发射使用相同的 16 档方向，而不是只画四个主轴。 */
-    int dx,dy;Battle_DirectionVector(Battle_AimDirection(position,target),&dx,&dy);
+    unsigned plan=g_world.shot_plan[position][target];
+    unsigned direction=plan?((plan&31u)-1u):Battle_AimDirection(position,target);
+    int dx,dy;Battle_DirectionVector(direction,&dx,&dy);
     line(x,y,x+dx*6/8,y+dy*6/8,white);
     if(destroyed) {
         line(x-5,y-5,x+5,y+5,gold);line(x-5,y+5,x+5,y-5,gold);
@@ -58,7 +60,7 @@ static void tank(unsigned position,unsigned target,uint16_t color,int destroyed)
 static void bullet(const BattleBullet *shot,uint16_t color)
 {
     if(!shot->active)return;
-    int x=GX+(int)(shot->x*CELL/16u),y=GY+(int)(shot->y*CELL/16u);
+    int x=GX+(int)(shot->x*CELL/16.0f),y=GY+(int)(shot->y*CELL/16.0f);
     /* 独立弹丸，不再连接发射者与目标。白色中心配合所属方颜色，反弹后
      * 用金色外沿，位置随逻辑飞行更新。旁边的小点数表示已撞墙次数。 */
     uint16_t edge=shot->collisions?gold:color;
@@ -75,10 +77,10 @@ void Tank_Display(uint32_t mode,uint32_t recent,const BattleScore *baseline,
     for(unsigned n=0;n<240u*320u;n++)g_framebuffer[n]=bg;
     char label[48];
     text(12,3,"TANK BATTLE",white,&ASCII_Font16);
-    text(174,5,"16 DIR",muted,&ASCII_Font12);
+    text(174,5,"16D .5s",muted,&ASCII_Font12);
     text(12,22,"BLUE: RL",blue,&ASCII_Font12);text(156,22,"RED: FIX",red,&ASCII_Font12);
     if(mode==MODE_TRAIN)snprintf(label,sizeof(label),"TRAIN %5lu/%u EPS %lu%%",(unsigned long)g_agent.episodes,TANK_TRAIN_EPISODES,(unsigned long)g_agent.epsilon_permille/10);
-    else if(mode==MODE_BASELINE)snprintf(label,sizeof(label),"RANDOM BASELINE  MAP %03lu",(unsigned long)g_world.map_id);
+    else if(mode==MODE_BASELINE)snprintf(label,sizeof(label),"RANDOM BASELINE  ARENA %lu",(unsigned long)g_world.map_id);
     else if(mode==MODE_EVALUATE)snprintf(label,sizeof(label),"EVALUATING 500 BATTLES");
     else snprintf(label,sizeof(label),"DEMO  BASE %u%% -> RL %u%%",percent(baseline->wins,baseline->games),percent(evaluation->wins,evaluation->games));
     text(12,39,label,mode==MODE_DEMO?green:muted,&ASCII_Font12);
@@ -93,16 +95,16 @@ void Tank_Display(uint32_t mode,uint32_t recent,const BattleScore *baseline,
     }
     tank(g_game.blue,g_game.red,blue,(int)g_game.red_hit);
     tank(g_game.red,g_game.blue,red,(int)g_game.blue_hit);
-    bullet(&g_game.blue_bullet,blue);bullet(&g_game.red_bullet,red);
-    if(g_game.outcome==BATTLE_BLUE_WIN)text(12,280,"BLUE WINS",blue,&ASCII_Font16);
-    else if(g_game.outcome==BATTLE_RED_WIN)text(12,280,"RED WINS",red,&ASCII_Font16);
+    for(unsigned i=0;i<BATTLE_BULLET_LIMIT;i++){bullet(g_game.blue_bullets+i,blue);bullet(g_game.red_bullets+i,red);}
+    if(g_game.outcome==BATTLE_BLUE_WIN)text(12,280,g_game.blue_bank_kills?"BLUE BANK WIN":"BLUE WINS",blue,&ASCII_Font16);
+    else if(g_game.outcome==BATTLE_RED_WIN)text(12,280,g_game.red_bank_kills?"RED BANK WIN":"RED WINS",red,&ASCII_Font16);
     else if(g_game.outcome)text(12,280,g_game.outcome==BATTLE_TIMEOUT?"TIMEOUT":"BOTH HIT - DRAW",gold,&ASCII_Font16);
     else {
-        snprintf(label,sizeof(label),"STEP %3lu  RED %s",(unsigned long)g_game.steps,g_game.phase==0?"READY":"AIMING");
+        snprintf(label,sizeof(label),"STEP %3lu  RED %s",(unsigned long)g_game.steps,g_game.red_cooldown<=1?"READY":"RELOAD");
         text(12,281,label,muted,&ASCII_Font12);
     }
-    if(mode==MODE_DEMO)snprintf(label,sizeof(label),"PLAY W%lu L%lu D%lu B3",(unsigned long)demo->wins,(unsigned long)demo->losses,(unsigned long)demo->draws);
-    else if(mode==MODE_TRAIN)snprintf(label,sizeof(label),"RECENT WIN %lu%%  Q 10 MiB",(unsigned long)recent);
+    if(mode==MODE_DEMO)snprintf(label,sizeof(label),"W%lu L%lu  AMMO %lu/%lu 1:1",(unsigned long)demo->wins,(unsigned long)demo->losses,(unsigned long)Battle_ActiveBullets(g_game.blue_bullets),(unsigned long)Battle_ActiveBullets(g_game.red_bullets));
+    else if(mode==MODE_TRAIN)snprintf(label,sizeof(label),"RECENT WIN %lu%%  Q 7 MiB",(unsigned long)recent);
     else snprintf(label,sizeof(label),"BASE WIN %u%%  RESET: LEARN",percent(baseline->wins,baseline->games));
     text(12,303,label,muted,&ASCII_Font12);
     /* SPI 由 CPU 发送。额外 clean 使 ST-LINK 截图也能读到真实完整帧。 */

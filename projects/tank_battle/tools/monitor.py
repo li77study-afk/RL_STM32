@@ -12,7 +12,10 @@ FIELDS=('sequence magic version stage fatal_count heartbeat_ms sdram_ok sdram_er
         'frames spi_errors render_us update_cycles training_ms q_bytes core_hz frozen '
         'blue_bullet_active blue_bullet_position blue_bullet_direction blue_bullet_collisions '
         'red_bullet_active red_bullet_position red_bullet_direction red_bullet_collisions q_used q_evictions '
-        'blue_bullet_x blue_bullet_y red_bullet_x red_bullet_y').split()
+        'blue_bullet_x blue_bullet_y red_bullet_x red_bullet_y '
+        'blue_active_bullets red_active_bullets blue_shots red_shots blue_cooldown_ms red_cooldown_ms '
+        'eval_blue_shots eval_red_shots eval_blue_ready eval_red_ready eval_blue_bank_kills eval_red_bank_kills eval_steps '
+        'fire_cooldown_ms tick_ms speed_ratio_x1000 coordinate_scale').split()
 
 def sample(link,address):
     for _ in range(100):
@@ -21,7 +24,7 @@ def sample(link,address):
         values=link.words(address,len(FIELDS));last=link.words(address,1)[0]
         if first==values[0]==last and not last&1:
             row=dict(zip(FIELDS,values))
-            if row['magic']!=0x54414e4b or row['version']!=3:raise RuntimeError('Not matching tank_battle 16-direction firmware')
+            if row['magic']!=0x54414e4b or row['version']!=4:raise RuntimeError('Not matching tank_battle arena multi-bullet firmware')
             return row
     raise RuntimeError('No coherent snapshot')
 
@@ -43,7 +46,15 @@ def main():
     with STLink() as link:
         ready(link,syms['g_diag'])
         if args.restart:
-            link.command(f'write_memory {syms["g_command"]:#x} 32 {{1}}');time.sleep(0.2)
+            previous=sample(link,syms['g_diag'])['heartbeat_ms']
+            link.command(f'write_memory {syms["g_command"]:#x} 32 {{1}}')
+            deadline=time.monotonic()+30
+            # 初始化需重算射击几何；确认新快照已清空，避免把重启前状态当首帧。
+            while True:
+                status=sample(link,syms['g_diag'])
+                if status['heartbeat_ms']!=previous and status['episodes']==0 and status['q_used']==0 and status['mode']==0:break
+                if time.monotonic()>deadline:raise TimeoutError('Restart did not publish an empty learning table')
+                time.sleep(0.05)
         start=time.monotonic()
         while True:
             row=sample(link,syms['g_diag']);row['elapsed_s']=round(time.monotonic()-start,3);rows.append(row)

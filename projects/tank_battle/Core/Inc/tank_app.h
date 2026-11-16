@@ -16,6 +16,9 @@ typedef struct {
     uint32_t red_bullet_active,red_bullet_position,red_bullet_direction,red_bullet_collisions;
     uint32_t q_used,q_evictions;
     uint32_t blue_bullet_x,blue_bullet_y,red_bullet_x,red_bullet_y;
+    uint32_t blue_active_bullets,red_active_bullets,blue_shots,red_shots;
+    uint32_t blue_cooldown_ms,red_cooldown_ms,eval_blue_shots,eval_red_shots,eval_blue_ready,eval_red_ready;
+    uint32_t eval_blue_bank_kills,eval_red_bank_kills,eval_steps,fire_cooldown_ms,tick_ms,speed_ratio_x1000,coordinate_scale;
 } TankDiagnostics;
 typedef struct { uint32_t frames,spi_errors,render_us; } TankDisplayStats;
 extern volatile TankDiagnostics g_diag;
