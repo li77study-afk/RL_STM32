@@ -1,0 +1,29 @@
+PASS rules: real flight, fixed direction, 3-wall limit, ricochet self-hit, no tunneling, synchronous moves, TD, full state keys.
+BASE seed=750 W=186 L=791 D=23 timeout=0
+TRAIN seed=750 ep=10000 updates=76010 eps=785 evalW=146/300 L=150 D=4
+TRAIN seed=750 ep=20000 updates=155381 eps=569 evalW=204/300 L=93 D=3
+TRAIN seed=750 ep=30000 updates=240121 eps=354 evalW=231/300 L=67 D=2
+TRAIN seed=750 ep=40000 updates=331818 eps=138 evalW=250/300 L=49 D=1
+TRAIN seed=750 ep=50000 updates=433074 eps=30 evalW=269/300 L=31 D=0
+TRAIN seed=750 ep=60000 updates=538634 eps=30 evalW=272/300 L=28 D=0
+FINAL seed=750 W=905 L=94 D=1 timeout=0 updates=538634
+TABLE used=100431 evictions=4
+BASE seed=1 W=186 L=791 D=23 timeout=0
+TRAIN seed=1 ep=10000 updates=75355 eps=785 evalW=141/300 L=157 D=2
+TRAIN seed=1 ep=20000 updates=155005 eps=569 evalW=213/300 L=86 D=1
+TRAIN seed=1 ep=30000 updates=239874 eps=354 evalW=240/300 L=58 D=2
+TRAIN seed=1 ep=40000 updates=332998 eps=138 evalW=249/300 L=49 D=2
+TRAIN seed=1 ep=50000 updates=434017 eps=30 evalW=272/300 L=27 D=1
+TRAIN seed=1 ep=60000 updates=538032 eps=30 evalW=278/300 L=22 D=0
+FINAL seed=1 W=911 L=88 D=1 timeout=0 updates=538032
+TABLE used=100495 evictions=5
+BASE seed=42 W=186 L=791 D=23 timeout=0
+TRAIN seed=42 ep=10000 updates=75248 eps=785 evalW=144/300 L=147 D=9
+TRAIN seed=42 ep=20000 updates=154549 eps=569 evalW=210/300 L=86 D=4
+TRAIN seed=42 ep=30000 updates=239161 eps=354 evalW=224/300 L=74 D=2
+TRAIN seed=42 ep=40000 updates=332643 eps=138 evalW=253/300 L=46 D=1
+TRAIN seed=42 ep=50000 updates=434430 eps=30 evalW=266/300 L=34 D=0
+TRAIN seed=42 ep=60000 updates=539856 eps=30 evalW=270/300 L=30 D=0
+FINAL seed=42 W=916 L=82 D=2 timeout=0 updates=539856
+TABLE used=101426 evictions=3
+PASS: three from-zero training seeds improve wins by >10 points and reduce losses; evaluation is read-only.

@@ -1,19 +1,21 @@
 # STM32 强化学习与嵌入式视觉实验
 
-面向 **反客 FK750M6-XBH6 / STM32H750XBH6** 的两个独立 GCC/CMake 工程。
+面向 **反客 FK750M6-XBH6 / STM32H750XBH6** 的三个独立 GCC/CMake 工程。
 
 | 工程 | 内容 | 操作入口 |
 |---|---|---|
 | [Q-learning](projects/q_learning/README.md) | 板上从零训练 16×16 迷宫，100 张地图，详细中文注释 | `projects/q_learning` |
+| [坦克迷宫对战](projects/tank_battle/README.md) | 蓝方板上 Q-learning、红方固定策略、飞行弹丸与三次撞墙反弹 | `projects/tank_battle` |
 | [CNN 手写数字识别](projects/digit_cnn/README.md) | OV5640 实时预览、单数字预处理、纯 C FP32 CNN 推理 | `projects/digit_cnn` |
 
 ```text
 projects/
 ├── q_learning/       原强化学习工程，完整保留
-└── digit_cnn/        独立摄像头 CNN 工程
+├── digit_cnn/        独立摄像头 CNN 工程
+└── tank_battle/      自主训练的飞行弹丸坦克对战
 ```
 
-在 VS Code 中直接打开对应工程目录，可分别构建、烧录、调试。两个工程使用同一块板，烧录其中一个会替换板上固件；脚本都会先备份现有 128 KiB Flash。
+在 VS Code 中直接打开对应工程目录，可分别构建、烧录、调试。三个工程使用同一块板，烧录其中一个会替换板上固件；脚本都会先备份现有 128 KiB Flash。
 
 本机工具链位于 `D:/STM32Tools`。例如从仓库根目录构建 CNN：
 

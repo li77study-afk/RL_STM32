@@ -1,0 +1,25 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Tank battle ST-Link",
+      "type": "cortex-debug",
+      "request": "launch",
+      "cwd": "${workspaceFolder}",
+      "executable": "${workspaceFolder}/build/tank_battle.elf",
+      "servertype": "openocd",
+      "device": "STM32H750XBHx",
+      "serverpath": "D:/STM32Tools/openocd/bin/openocd.exe",
+      "armToolchainPath": "D:/STM32Tools/arm-gnu-toolchain-13.3.rel1-mingw-w64-i686-arm-none-eabi/bin",
+      "searchDir": [
+        "D:/STM32Tools/openocd/share/openocd/scripts"
+      ],
+      "configFiles": [
+        "interface/stlink.cfg",
+        "target/stm32h7x.cfg"
+      ],
+      "preLaunchTask": "build",
+      "runToEntryPoint": "main"
+    }
+  ]
+}
