@@ -54,6 +54,18 @@ if (!Arena_Init(&g_world, 1)) Error_Handler();
 
 蓝方对未学习的带开火动作采用小的初始偏好，冷却就绪却长期不射击会有节奏代价。开火奖励上限低于持续时间代价，胜负奖励仍占主导，不能靠原地刷射击获得正回报。
 
+## 修改固定红方策略
+
+策略独立在 [Game/fixed_policy.c](Game/fixed_policy.c)，声明在 [Game/fixed_policy.h](Game/fixed_policy.h)。
+
+```c
+uint32_t FixedPolicy_Decide(const FixedPolicyInput *input);
+```
+
+输入为只读地图、当前拍开始前状态和阶段；输出为 0～9 的移动/开火动作。做鲁棒性实验时，只修改 `challenge_config` 或 `challenge_policy()`：训练继续使用不变的 `reference_policy()`，评估与演示使用你改过的挑战对手。
+
+[完整输入输出、动作表、冷却时序与可替换示例](docs/FIXED_POLICY_API.md)。默认配置与拆分前行为一致。改好后运行原生测试、重新编译烧录即可；复位仍会从零经验重新训练。
+
 ## 强化学习表示
 
 多颗弹丸的精确连续坐标无法实用地逐项枚举。本版使用**战术观测聚合**：掩体/路径方向、敌方相对方位与距离、射击机会、冷却就绪、近两拍来弹风险和弹幕密度。
@@ -90,7 +102,8 @@ python tools/snapshot.py --wait-multi --output logs/multi.png
 需要带 32 位 SDRAM 的 M6 核心板。LCD SCK=PG13、MOSI=PG14、CS=PA15、DC=PG12、背光=PH6。ST-LINK 使用 PA13/PA14、GND 和目标参考电压。
 
 - [Game/arena_maps.c](Game/arena_maps.c)：三张专用掩体竞技场。
-- [Game/battle.c](Game/battle.c)：500 ms 冷却、多弹池、等速飞行、反弹解、固定红方和战术观测。
+- [Game/battle.c](Game/battle.c)：500 ms 冷却、多弹池、等速飞行、反弹解和战术观测。
+- [Game/fixed_policy.c](Game/fixed_policy.c)：可单独修改的红方固定策略、训练/挑战配置。
 - [Learning/tank_agent.c](Learning/tank_agent.c)：进攻性初值、稀疏 Q-learning、只读评估。
 - [Core/Src/tank_app.c](Core/Src/tank_app.c)：板上训练/评估/演示和固定时间步。
 - [Core/Src/tank_display.c](Core/Src/tank_display.c)：掩体、炮塔、弹幕、冷却和胜负显示。

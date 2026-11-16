@@ -21,6 +21,8 @@
 enum { ACTION_UP,ACTION_RIGHT,ACTION_DOWN,ACTION_LEFT,ACTION_WAIT,
        ACTION_UP_FIRE,ACTION_RIGHT_FIRE,ACTION_DOWN_FIRE,ACTION_LEFT_FIRE,ACTION_FIRE };
 enum { BATTLE_RUNNING,BATTLE_BLUE_WIN,BATTLE_RED_WIN,BATTLE_MUTUAL,BATTLE_TIMEOUT };
+typedef enum { BATTLE_TEAM_BLUE=0,BATTLE_TEAM_RED=1 } BattleTeam;
+typedef enum { POLICY_TRAIN=0,POLICY_EVALUATE=1,POLICY_DEMO=2 } BattlePolicyStage;
 typedef struct {
     uint8_t open[BATTLE_CELLS];
     uint16_t neighbor[BATTLE_CELLS][4];
@@ -48,11 +50,17 @@ typedef struct { float reward; uint32_t terminated,truncated; } BattleTransition
 int Battle_WorldInit(BattleWorld *world,const char cells[16][17],uint32_t map_id);
 uint32_t Battle_Random(uint32_t *rng);
 void Battle_Reset(const BattleWorld *world,BattleState *state,uint32_t *rng);
+/* 兼容接口固定调用训练基准；选择挑战策略请使用带阶段的 StepWithPolicy。 */
 uint32_t Battle_RedAction(const BattleWorld *world,const BattleState *state);
 uint32_t Battle_AimDirection(uint32_t origin,uint32_t target);
 void Battle_DirectionVector(uint32_t direction,int *dx,int *dy);
 BattleTransition Battle_StepActions(const BattleWorld *world,BattleState *state,uint32_t blue_action,uint32_t red_action);
 BattleTransition Battle_Step(const BattleWorld *world,BattleState *state,uint32_t blue_action);
+BattleTransition Battle_StepWithPolicy(const BattleWorld *world,BattleState *state,uint32_t blue_action,BattlePolicyStage stage);
+/* 输出 5 位风险掩码：bit 0~4 对应上、右、下、左、等待。
+ * 参数均须有效；函数只读输入。是否预演尚未发生的反弹由调用方显式选择。 */
+void Battle_PredictThreats(const BattleWorld *world,const BattleState *state,BattleTeam team,
+                          uint32_t predict_reflections,uint32_t *risk_now,uint32_t *risk_next);
 uint64_t Battle_StateKey(const BattleState *state);
 void Battle_Observe(const BattleWorld *world,BattleState *state);
 uint32_t Battle_ActiveBullets(const BattleBullet *bullets);

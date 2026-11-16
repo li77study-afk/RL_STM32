@@ -1,5 +1,6 @@
 /** 宽阔掩体竞技场：车弹等速、0.5 秒独立冷却、多弹丸、反弹射击解。 */
 #include "battle.h"
+#include "fixed_policy.h"
 #include <string.h>
 
 /* 每子步长度为 4，四个子步总长度为 16，等于坦克每拍移动距离。
@@ -120,8 +121,9 @@ int Battle_WorldInit(BattleWorld *w,const char cells[16][17],uint32_t id)
 
 /* 对 5 个候选移动落点预测近两拍弹道危险。这是观测特征，不直接替蓝方选动作。
  * 敌弹和反弹自弹都会进入预测；同一方未反弹子弹有炮口保护。 */
-static void threats(const BattleWorld *w,const BattleState *s,int blue,unsigned *now,unsigned *later)
+void Battle_PredictThreats(const BattleWorld *w,const BattleState *s,BattleTeam team,uint32_t predict_reflections,uint32_t *now,uint32_t *later)
 {
+    int blue=team==BATTLE_TEAM_BLUE;
     unsigned own=blue?s->blue:s->red,enemy=blue?s->red:s->blue;*now=0;*later=0;
     unsigned candidate[5];for(unsigned a=0;a<5;a++){candidate[a]=a<4?w->neighbor[own][a]:own;if(candidate[a]==enemy)candidate[a]=own;}
     for(unsigned team=0;team<2;team++) {
@@ -132,9 +134,8 @@ static void threats(const BattleWorld *w,const BattleState *s,int blue,unsigned 
             if(!own_shot||b.collisions)for(unsigned a=0;a<5;a++)if(contact(b.x,b.y,b.x,b.y,candidate[a])<=1)*now|=1u<<a;
             for(unsigned k=0;k<2*BATTLE_BULLET_SUBSTEPS;k++) {
                 float ox=b.x,oy=b.y;unsigned old_bounces=b.collisions;advance(w,&b);if(!b.active)break;
-                /* 固定红方只按当前来弹方向反应，不提前预知尚未发生的反弹。
-                 * 蓝方观测保留完整几何预测，能学习利用掩体后的射击时机。 */
-                if(!blue&&b.collisions!=old_bounces)break;
+                /* 调用方决定是否预测尚未发生的墙碰，物理工具不绑定某种对手策略。 */
+                if(!predict_reflections&&b.collisions!=old_bounces)break;
                 if(own_shot&&!b.collisions)continue;
                 for(unsigned a=0;a<5;a++)if(contact(ox,oy,b.x,b.y,candidate[a])<=1){if(k<BATTLE_BULLET_SUBSTEPS)*now|=1u<<a;else *later|=1u<<a;}
             }
@@ -143,13 +144,14 @@ static void threats(const BattleWorld *w,const BattleState *s,int blue,unsigned 
 }
 void Battle_Observe(const BattleWorld *w,BattleState *s)
 {
-    unsigned walls=0,approach=0,now,later,dist=w->distance[s->blue][s->red];
+    unsigned walls=0,approach=0,dist=w->distance[s->blue][s->red];
+    uint32_t now,later;
     for(unsigned a=0;a<4;a++){
         unsigned next=w->neighbor[s->blue][a];
         if(next==s->blue||next==s->red)walls|=1u<<a;
         if(w->distance[next][s->red]<dist)approach|=1u<<a;
     }
-    threats(w,s,1,&now,&later);
+    Battle_PredictThreats(w,s,BATTLE_TEAM_BLUE,1,&now,&later);
     unsigned distance_bin=dist<3?0:dist<6?1:dist<10?2:3;
     unsigned plan=w->shot_plan[s->blue][s->red],kind=plan?(plan>>5)+1:0;
     unsigned own_count=Battle_ActiveBullets(s->blue_bullets),enemy_count=Battle_ActiveBullets(s->red_bullets);
@@ -172,18 +174,8 @@ void Battle_Reset(const BattleWorld *w,BattleState *s,uint32_t *rng)
 }
 uint32_t Battle_RedAction(const BattleWorld *w,const BattleState *s)
 {
-    unsigned now,later;threats(w,s,0,&now,&later);
-    unsigned best=ACTION_WAIT;unsigned best_cost=0xffffffffu;
-    for(unsigned a=0;a<5;a++) {
-        unsigned next=a<4?w->neighbor[s->red][a]:s->red;if(next==s->blue)continue;
-        unsigned cost=w->distance[next][s->blue]*4u+((now>>a)&1u)*100u+((later>>a)&1u)*20u;
-        if(a<4&&next==s->red)cost+=50;
-        if(cost<best_cost){best_cost=cost;best=a;}
-    }
-    /* 冷却一好就积极寻找直射/反弹机会；移动与开火可以同时发生。 */
-    unsigned source=best<4?w->neighbor[s->red][best]:s->red;
-    int shoot=s->red_cooldown<=1&&(w->shot_plan[source][s->blue]||w->distance[source][s->blue]<=8);
-    return best+(shoot?5u:0u);
+    const FixedPolicyInput input={w,s,POLICY_TRAIN};
+    return FixedPolicy_Decide(&input);
 }
 static int fire_pool(const BattleWorld *w,BattleBullet *pool,unsigned source,unsigned target)
 {
@@ -251,5 +243,13 @@ BattleTransition Battle_StepActions(const BattleWorld *w,BattleState *s,uint32_t
 }
 BattleTransition Battle_Step(const BattleWorld *w,BattleState *s,uint32_t action)
 {
-    return Battle_StepActions(w,s,action,Battle_RedAction(w,s));
+    return Battle_StepWithPolicy(w,s,action,POLICY_TRAIN);
+}
+
+BattleTransition Battle_StepWithPolicy(const BattleWorld *w,BattleState *s,uint32_t action,BattlePolicyStage stage)
+{
+    /* 先让固定红方读取旧状态决策，再统一结算双方动作。 */
+    const FixedPolicyInput input={w,s,stage};
+    uint32_t red_action=FixedPolicy_Decide(&input);
+    return Battle_StepActions(w,s,action,red_action);
 }

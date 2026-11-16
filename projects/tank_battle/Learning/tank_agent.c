@@ -102,16 +102,21 @@ void BattleScore_Add(BattleScore *score,const BattleState *s)
     else {score->draws++;score->timeouts+=s->outcome==BATTLE_TIMEOUT;}
 }
 
-BattleScore TankAgent_Evaluate(const BattleWorld *w,const TankAgent *a,uint32_t seed,uint32_t games,int random)
+BattleScore TankAgent_EvaluateWithPolicy(const BattleWorld *w,const TankAgent *a,uint32_t seed,uint32_t games,int random,BattlePolicyStage stage)
 {
     BattleScore score={0};uint32_t spawn_rng=seed?seed:1,action_rng=seed^0xa17e531u;
     for(unsigned n=0;n<games;n++) {
         BattleState s;Battle_Reset(w,&s,&spawn_rng);
         while(s.outcome==BATTLE_RUNNING) {
             unsigned action=random?Battle_Random(&action_rng)%BATTLE_ACTIONS:TankAgent_Greedy(a,&s);
-            Battle_Step(w,&s,action);
+            Battle_StepWithPolicy(w,&s,action,stage);
         }
         BattleScore_Add(&score,&s);
     }
     return score;
+}
+
+BattleScore TankAgent_Evaluate(const BattleWorld *w,const TankAgent *a,uint32_t seed,uint32_t games,int random)
+{
+    return TankAgent_EvaluateWithPolicy(w,a,seed,games,random,POLICY_EVALUATE);
 }

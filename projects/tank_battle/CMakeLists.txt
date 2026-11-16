@@ -44,6 +44,7 @@ set(CORE_SOURCES
     Core/Src/board_sdram.c
     Core/Src/syscalls.c
     Game/battle.c
+    Game/fixed_policy.c
     Learning/tank_agent.c
     Game/arena_maps.c
 )

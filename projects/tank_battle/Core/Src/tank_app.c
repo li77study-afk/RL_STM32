@@ -95,14 +95,14 @@ void Tank_App_Poll(void)
                 if(++intro_games>=2) {
                     mode=MODE_TRAIN;train_start=now;Battle_Reset(&g_world,&g_game,&spawn_rng);
                 } else Battle_Reset(&g_world,&g_game,&intro_rng);
-            } else Battle_Step(&g_world,&g_game,Battle_Random(&intro_action_rng)%BATTLE_ACTIONS);
+            } else Battle_StepWithPolicy(&g_world,&g_game,Battle_Random(&intro_action_rng)%BATTLE_ACTIONS,POLICY_EVALUATE);
         } else if(mode==MODE_TRAIN&&now-step_tick>=5u) {
             step_tick=now;
             for(unsigned n=0;n<256&&g_agent.episodes<TANK_TRAIN_EPISODES;n++) {
                 if(g_game.outcome)Battle_Reset(&g_world,&g_game,&spawn_rng);
                 uint32_t cycles=DWT->CYCCNT;
                 BattleState before=g_game;unsigned action=TankAgent_Choose(&g_agent,&g_game);
-                BattleTransition t=Battle_Step(&g_world,&g_game,action);
+                BattleTransition t=Battle_StepWithPolicy(&g_world,&g_game,action,POLICY_TRAIN);
                 TankAgent_Update(&g_agent,&before,action,&g_game,t);update_cycles=DWT->CYCCNT-cycles;
                 if(g_game.outcome) {
                     TankAgent_Finish(&g_agent,&g_game);
@@ -121,7 +121,7 @@ void Tank_App_Poll(void)
             if(g_game.outcome){step_tick=now;Battle_Reset(&g_world,&g_game,&demo_rng);}
             else {
                 step_tick+=BATTLE_TICK_MS; /* 固定时间步，避免显示开销累积拉长 0.5 s 冷却。 */
-                Battle_Step(&g_world,&g_game,TankAgent_Greedy(&g_agent,&g_game));
+                Battle_StepWithPolicy(&g_world,&g_game,TankAgent_Greedy(&g_agent,&g_game),POLICY_DEMO);
                 if(g_game.outcome)BattleScore_Add(&demo,&g_game);
             }
         }

@@ -2,6 +2,7 @@
 #include "battle.h"
 #include "tank_agent.h"
 #include "arena_maps.h"
+#include "fixed_policy.h"
 #include <assert.h>
 #include <math.h>
 #include <stdio.h>
@@ -40,6 +41,43 @@ static unsigned clearance_squares(void)
         }
     }
     assert(tail==total&&total>0);return total;
+}
+
+static uint32_t bytes_hash(const void *data,unsigned count)
+{
+    const unsigned char *p=(const unsigned char *)data;uint32_t h=2166136261u;
+    for(unsigned n=0;n<count;n++)h=(h^p[n])*16777619u;return h;
+}
+static void policy_contract(void)
+{
+    assert(FixedPolicy_Decide(NULL)==ACTION_WAIT);
+    FixedPolicyInput input={0};assert(FixedPolicy_Decide(&input)==ACTION_WAIT);
+    uint32_t rng=0x504f4c49u,hash=2166136261u,steps=0,evaluate_hash=2166136261u,demo_hash=2166136261u;
+    for(unsigned id=1;id<=ARENA_COUNT;id++) {
+        assert(Arena_Init(&world,id));uint32_t world_hash=bytes_hash(&world,sizeof(world));
+        for(unsigned game=0;game<120;game++) {
+            BattleState state;Battle_Reset(&world,&state,&rng);
+            while(!state.outcome) {
+                BattleState saved=state;input=(FixedPolicyInput){&world,&state,POLICY_TRAIN};
+                unsigned action=FixedPolicy_Decide(&input);assert(action<BATTLE_ACTIONS);
+                assert(action==Battle_RedAction(&world,&state));
+                input.stage=POLICY_EVALUATE;unsigned evaluate=FixedPolicy_Decide(&input);
+                assert(evaluate<BATTLE_ACTIONS&&evaluate==FixedPolicy_Decide(&input));
+                input.stage=POLICY_DEMO;unsigned demo_action=FixedPolicy_Decide(&input);
+                assert(demo_action<BATTLE_ACTIONS&&demo_action==FixedPolicy_Decide(&input));
+                input.stage=(BattlePolicyStage)99;assert(FixedPolicy_Decide(&input)==ACTION_WAIT);
+                assert(memcmp(&state,&saved,sizeof(state))==0);
+                evaluate_hash=(evaluate_hash^evaluate)*16777619u;demo_hash=(demo_hash^demo_action)*16777619u;
+                hash=(hash^action)*16777619u;
+                Battle_StepActions(&world,&state,Battle_Random(&rng)%BATTLE_ACTIONS,action);
+                hash=(hash^state.blue^(state.red<<8)^(state.outcome<<16))*16777619u;steps++;
+            }
+        }
+        assert(world_hash==bytes_hash(&world,sizeof(world)));
+    }
+    /* 从重构前代码生成的回归指纹：只约束训练基准，挑战策略允许有意改变。 */
+    assert(steps==3557&&hash==0x8387578au);
+    printf("PASS fixed policy contract: readonly, deterministic, legal actions; reference steps=%u hash=%08x challenge=%08x demo=%08x\n",steps,hash,evaluate_hash,demo_hash);
 }
 
 static void rules(void)
@@ -115,12 +153,12 @@ static uint32_t hash_table(void)
 }
 int main(void)
 {
-    rules();assert(Arena_Init(&world,1));assert(sizeof(table)==7u*1024u*1024u);
+    policy_contract();rules();assert(Arena_Init(&world,1));assert(sizeof(table)==7u*1024u*1024u);
     unsigned seeds[3]={750,1,42};
     for(unsigned run=0;run<3;run++) {
         TankAgent a;TankAgent_Init(&a,table,seeds[run]);unsigned rng=seeds[run]^0x51a750u;
-        BattleScore base=TankAgent_Evaluate(&world,&a,0xbaf123u,500,1);
-        BattleScore prior=TankAgent_Evaluate(&world,&a,0xbaf123u,500,0);
+        BattleScore base=TankAgent_EvaluateWithPolicy(&world,&a,0xbaf123u,500,1,POLICY_TRAIN);
+        BattleScore prior=TankAgent_EvaluateWithPolicy(&world,&a,0xbaf123u,500,0,POLICY_TRAIN);
         printf("UNTRAINED seed=%u W=%u L=%u D=%u shots=%u\n",seeds[run],prior.wins,prior.losses,prior.draws,prior.blue_shots);
         printf("BASE seed=%u W=%u L=%u D=%u shots=%u ready=%u bank=%u\n",seeds[run],base.wins,base.losses,base.draws,base.blue_shots,base.blue_ready,base.blue_bank_kills);fflush(stdout);
         while(a.episodes<TANK_TRAIN_EPISODES) {
@@ -135,13 +173,15 @@ int main(void)
                 }
             }
             TankAgent_Finish(&a,&game);
-            if(a.episodes%10000==0){BattleScore e=TankAgent_Evaluate(&world,&a,0x7155u,200,0);printf("TRAIN seed=%u ep=%u W=%u/200 shots=%u ready=%u bank=%u\n",seeds[run],a.episodes,e.wins,e.blue_shots,e.blue_ready,e.blue_bank_kills);fflush(stdout);}
+            if(a.episodes%10000==0){BattleScore e=TankAgent_EvaluateWithPolicy(&world,&a,0x7155u,200,0,POLICY_TRAIN);printf("TRAIN seed=%u ep=%u W=%u/200 shots=%u ready=%u bank=%u\n",seeds[run],a.episodes,e.wins,e.blue_shots,e.blue_ready,e.blue_bank_kills);fflush(stdout);}
         }
-        uint32_t hash=hash_table();TankAgent saved=a;BattleScore e=TankAgent_Evaluate(&world,&a,0xbaf123u,500,0);
+        uint32_t hash=hash_table();TankAgent saved=a;BattleScore e=TankAgent_EvaluateWithPolicy(&world,&a,0xbaf123u,500,0,POLICY_TRAIN);
         assert(hash==hash_table()&&memcmp(&a,&saved,sizeof(a))==0);
         for(unsigned n=0;n<TANK_Q_CAPACITY;n++)for(unsigned k=0;k<BATTLE_ACTIONS;k++)assert(isfinite(table[n].q[k]));
         printf("FINAL seed=%u W=%u L=%u D=%u shots=%u ready=%u bank=%u steps=%u used=%u evict=%u updates=%u\n",seeds[run],e.wins,e.losses,e.draws,e.blue_shots,e.blue_ready,e.blue_bank_kills,e.steps,a.used,a.evictions,a.updates);fflush(stdout);
         assert(e.wins>base.wins+50&&e.wins>prior.wins+50);
+        BattleScore challenge=TankAgent_Evaluate(&world,&a,0xbaf123u,500,0);
+        printf("CHALLENGE seed=%u W=%u L=%u D=%u shots=%u (reported, no win threshold)\n",seeds[run],challenge.wins,challenge.losses,challenge.draws,challenge.blue_shots);
     }
     puts("PASS learning: three seeds improve win rate; evaluation does not train.");return 0;
 }

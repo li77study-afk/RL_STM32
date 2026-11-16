@@ -31,5 +31,8 @@ void TankAgent_Update(TankAgent *agent,const BattleState *before,uint32_t action
 void TankAgent_Finish(TankAgent *agent,const BattleState *state);
 void BattleScore_Add(BattleScore *score,const BattleState *state);
 /* 固定出生随机数序列，关闭探索，且绝不修改 Q 表或训练 RNG。random=1 测随机基线。 */
+/* 默认评估挑战对手；需要指定阶段时使用 WithPolicy 版本。 */
+BattleScore TankAgent_EvaluateWithPolicy(const BattleWorld *world,const TankAgent *agent,uint32_t seed,
+                                        uint32_t games,int random,BattlePolicyStage stage);
 BattleScore TankAgent_Evaluate(const BattleWorld *world,const TankAgent *agent,uint32_t seed,uint32_t games,int random);
 #endif

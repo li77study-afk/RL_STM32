@@ -1,5 +1,7 @@
 # 掩体竞技场、车弹同速与 500 ms 连发验证
 
+本页记录策略封装前的竞技场实机版本；策略模块重构的新增检查见 [固定策略封装验证](FIXED_POLICY_VALIDATION.md)。
+
 日期：2026-11-16（Asia/Shanghai）。FK750M6-XBH6 / STM32H750XBH6 @480 MHz、16 MiB SDRAM、240×320 SPI 屏。全部游戏与训练由单片机完成，不使用 UART。
 
 ## 地图与规则
